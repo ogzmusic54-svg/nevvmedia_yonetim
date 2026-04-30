@@ -1,0 +1,301 @@
+// Nevvmedia Ajans Yönetim Sistemi - Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============= ENUMS =============
+
+enum UserRole {
+  ADMIN
+  EMPLOYEE
+}
+
+enum CustomerStatus {
+  LEAD
+  PROSPECT
+  ACTIVE
+  INACTIVE
+  LOST
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum ContractStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum ActivityType {
+  CUSTOMER_CREATED
+  CUSTOMER_UPDATED
+  TASK_CREATED
+  TASK_UPDATED
+  TASK_COMPLETED
+  TASK_COMMENTED
+  FILE_UPLOADED
+  INVOICE_CREATED
+  INVOICE_PAID
+  QUOTE_CREATED
+  CONTRACT_CREATED
+  USER_CREATED
+}
+
+// ============= USERS =============
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      UserRole @default(EMPLOYEE)
+  phone     String?
+  image     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignments       CustomerAssignment[]
+  createdTasks      Task[]               @relation("TaskCreator")
+  assignedTasks     Task[]               @relation("TaskAssignee")
+  comments          TaskComment[]
+  uploadedFiles     UploadedFile[]
+  activities        ActivityLog[]
+  createdCustomers  Customer[]           @relation("CustomerCreator")
+
+  @@index([email])
+}
+
+// ============= CUSTOMERS / BRANDS =============
+
+model Customer {
+  id          String         @id @default(cuid())
+  name        String
+  company     String?
+  email       String?
+  phone       String?
+  whatsapp    String?
+  website     String?
+  address     String?
+  taxOffice   String?
+  taxNumber   String?
+  status      CustomerStatus @default(ACTIVE)
+  industry    String?
+  notes       String?
+  logoUrl     String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  createdById String?
+
+  createdBy   User?                 @relation("CustomerCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  assignments CustomerAssignment[]
+  tasks       Task[]
+  files       UploadedFile[]
+  invoices    Invoice[]
+  quotes      Quote[]
+  contracts   Contract[]
+  activities  ActivityLog[]
+
+  @@index([status])
+  @@index([name])
+}
+
+model CustomerAssignment {
+  id         String   @id @default(cuid())
+  customerId String
+  userId     String
+  role       String?  // Bu müşteride rolü (örn. "Hesap Yöneticisi", "Tasarımcı")
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, userId])
+  @@index([customerId])
+  @@index([userId])
+}
+
+// ============= TASKS =============
+
+model Task {
+  id           String       @id @default(cuid())
+  customerId   String
+  title        String
+  description  String?
+  status       TaskStatus   @default(TODO)
+  priority     TaskPriority @default(MEDIUM)
+  dueDate      DateTime?
+  completedAt  DateTime?
+  createdById  String
+  assignedToId String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  customer   Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdBy  User           @relation("TaskCreator", fields: [createdById], references: [id])
+  assignedTo User?          @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  comments   TaskComment[]
+  files      UploadedFile[]
+
+  @@index([customerId])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+// ============= FILES =============
+
+model UploadedFile {
+  id           String   @id @default(cuid())
+  customerId   String?
+  taskId       String?
+  name         String   // Original filename
+  storedName   String   // On disk filename (cuid or hash)
+  path         String   // Relative path under uploads dir
+  size         Int
+  mimeType     String
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  task       Task?     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploadedBy User      @relation(fields: [uploadedById], references: [id])
+
+  @@index([customerId])
+  @@index([taskId])
+}
+
+// ============= FINANCIAL: INVOICES =============
+
+model Invoice {
+  id          String        @id @default(cuid())
+  customerId  String
+  invoiceNo   String?       // Manuel girilebilen referans no
+  period      String?       // "2026-04" gibi dönem
+  description String?
+  amount      Decimal       @db.Decimal(12, 2)
+  status      InvoiceStatus @default(PENDING)
+  issueDate   DateTime      @default(now())
+  dueDate     DateTime?
+  paidAt      DateTime?
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+// ============= FINANCIAL: QUOTES =============
+
+model Quote {
+  id          String      @id @default(cuid())
+  customerId  String
+  title       String
+  description String?
+  amount      Decimal     @db.Decimal(12, 2)
+  status      QuoteStatus @default(DRAFT)
+  validUntil  DateTime?
+  sentAt      DateTime?
+  acceptedAt  DateTime?
+  notes       String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([status])
+}
+
+// ============= FINANCIAL: CONTRACTS =============
+
+model Contract {
+  id          String         @id @default(cuid())
+  customerId  String
+  title       String
+  description String?
+  fileUrl     String?        // Yüklenen sözleşme PDF'i
+  startDate   DateTime
+  endDate     DateTime?
+  amount      Decimal?       @db.Decimal(12, 2)
+  status      ContractStatus @default(ACTIVE)
+  notes       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([status])
+}
+
+// ============= ACTIVITY LOG =============
+
+model ActivityLog {
+  id          String       @id @default(cuid())
+  type        ActivityType
+  description String
+  userId      String?
+  customerId  String?
+  metadata    Json?
+  createdAt   DateTime     @default(now())
+
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([customerId])
+  @@index([userId])
+}
