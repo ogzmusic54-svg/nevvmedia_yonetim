@@ -40,20 +40,18 @@ RUN addgroup --system --gid 1001 nodejs \
  && mkdir -p /data/uploads \
  && chown -R nextjs:nodejs /data/uploads
 
-# Standalone output + public + static
+# Next.js standalone output (kendi minimal node_modules ile)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
-# Migrate ve seed çalıştırabilmek için Prisma + tsx + seed kaynak dosyaları
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/tsx ./node_modules/tsx
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/bcryptjs ./node_modules/bcryptjs
+# Migrate / db push / seed çalıştırabilmek için TÜM bağımlılıklar
+# Standalone'un minimal node_modules'üne dokunmamak için ayrı dizinde tutulur.
+# Node.js require resolution _init/node_modules'ü flat olarak çözebilir.
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./_init/node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
-# Açılışta migrate + seed sonra Next.js başlat
+# Başlangıç scripti (migrate + seed + uygulama)
 COPY --chown=nextjs:nodejs scripts/start.sh ./start.sh
 RUN chmod +x ./start.sh
 

@@ -1,8 +1,10 @@
 #!/bin/sh
 set -e
 
-PRISMA_BIN="./node_modules/prisma/build/index.js"
-TSX_BIN="./node_modules/tsx/dist/cli.mjs"
+# Prisma & tsx tüm transitive bağımlılıklarıyla _init/node_modules altında.
+# Buradan çalıştırılan node, _init/node_modules'ü flat olarak resolve eder.
+PRISMA_BIN="./_init/node_modules/prisma/build/index.js"
+TSX_BIN="./_init/node_modules/tsx/dist/cli.mjs"
 
 if [ -d "./prisma/migrations" ] && [ "$(ls -A ./prisma/migrations 2>/dev/null)" ]; then
   echo "==> Veritabanı migrasyonları uygulanıyor..."
@@ -19,7 +21,9 @@ else
 fi
 
 echo "==> Seed (varsa admin oluşturuluyor)..."
-node "$TSX_BIN" prisma/seed.ts || {
+# tsx ile seed.ts çalıştırırken hem tsx kendi modüllerini, hem seed.ts'in
+# import'ları (PrismaClient, bcryptjs) için _init/node_modules'e gerek var.
+NODE_PATH=/app/_init/node_modules node "$TSX_BIN" prisma/seed.ts || {
   echo "[!] Seed başarısız oldu, devam ediliyor..."
 }
 
