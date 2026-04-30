@@ -1,0 +1,6 @@
+# Linux scripts MUST keep LF endings even on Windows checkouts
+*.sh text eol=lf
+Dockerfile text eol=lf
+docker-compose.yml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

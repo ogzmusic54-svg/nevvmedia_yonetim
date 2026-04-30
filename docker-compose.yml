@@ -1,17 +1,19 @@
-# Nevvmedia Yönetim — kendi başına ayağa kaldırma
-# Coolify'da kullanmak için bu dosyayı "Docker Compose" olarak ekleyin
-# veya sadece Dockerfile + ayrı bir Postgres servisi tercih edin.
+# Nevvmedia Yönetim — Coolify uyumlu Docker Compose
+#
+# Coolify reverse proxy (Traefik) ile dış erişimi otomatik yönetir,
+# bu yüzden `ports:` yerine `expose:` kullanıyoruz.
+# Domain'i Coolify'da resource ayarlarından bağlayın.
 
 services:
-  app:
+  nevvmedia-app:
     build: .
     image: nevvmedia-yonetim:latest
     restart: unless-stopped
     depends_on:
-      postgres:
+      nevvmedia-postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://nevvmedia:${DB_PASSWORD:-change_me_in_env}@postgres:5432/nevvmedia_yonetim?schema=public
+      DATABASE_URL: postgresql://nevvmedia:${DB_PASSWORD:-change_me_in_env}@nevvmedia-postgres:5432/nevvmedia_yonetim?schema=public
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_TRUST_HOST: "true"
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
@@ -25,12 +27,18 @@ services:
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-info@nevvmedia.com}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Nevvmedia2026!}
       SEED_ADMIN_NAME: ${SEED_ADMIN_NAME:-Nevvmedia Yönetici}
-    ports:
-      - "${APP_PORT:-3000}:3000"
+    expose:
+      - "3000"
     volumes:
-      - uploads:/data/uploads
+      - nevvmedia-uploads:/data/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/giris >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
-  postgres:
+  nevvmedia-postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
@@ -38,7 +46,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me_in_env}
       POSTGRES_DB: nevvmedia_yonetim
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - nevvmedia-pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nevvmedia -d nevvmedia_yonetim"]
       interval: 10s
@@ -46,5 +54,5 @@ services:
       retries: 10
 
 volumes:
-  pgdata:
-  uploads:
+  nevvmedia-pgdata:
+  nevvmedia-uploads:
